@@ -1,5 +1,6 @@
 import socket
 
+# cd "C:\Users\Abo Al Cho5\Desktop\Ibrahim\Projects\File Transfer(FT)"
 
 port=5050
 host= '192.168.1.3'
@@ -23,9 +24,10 @@ def send(msg):
 print(f"[CONNECTED] to {host}:{port}")
 looped= True
 while looped:
-    msg=input("Do you want to send a message?(Y/N): ")
-    if msg.capitalize()=="Y":
-        send("I AM sending you a message ")
-    else:
+    user_input=input("Do you want to send a message?(Type it/ d to disconnect): ")
+    if user_input.capitalize()=="D":
         send(disconnect_msg)
         looped= False
+        
+    else:
+        send(user_input)

@@ -1,5 +1,7 @@
 import socket 
 
+# cd "C:\Users\Abo Al Cho5\Desktop\Ibrahim\Projects\File Transfer(FT)"
+
 host= "0.0.0.0"
 port= 12345
 #inet is internet socket, type of internet socket is datagram socket(UDP)

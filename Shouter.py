@@ -1,6 +1,8 @@
 import socket
 import time
 
+# cd "C:\Users\Abo Al Cho5\Desktop\Ibrahim\Projects\File Transfer(FT)"
+
 host= "255.255.255.255"
 port= 12345
 shouter_socket= socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

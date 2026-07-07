@@ -1,8 +1,9 @@
 import socket
 import threading 
 
+
 port=5050
-host= socket.gethostbyname(socket.gethostname())
+host= '0.0.0.0'
 address=(host, port)
 format= "utf-8"
 header= 64
@@ -28,12 +29,21 @@ def handle_client(conn, addr):
 
 def start():
     server.listen(5)
-    while True:
-        connection, addr= server.accept()
-        thread= threading.Thread(target= handle_client, args=(connection, addr))
-        thread.daemon= True
-        thread.start()
-        print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
+    server.settimeout(1.0)
+    print(f"[STARTING SERVER]")
 
-print(f"[STARTING SERVER]")
-start()
+    while True:
+        try:
+            connection, addr= server.accept()
+            thread= threading.Thread(target= handle_client, args=(connection, addr))
+            thread.daemon= True
+            thread.start()
+            print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
+        except socket.timeout:
+            continue
+
+try:
+    start()
+except KeyboardInterrupt:
+    print(f"[SHUTTING DOWN SERVER]")
+    server.close()
