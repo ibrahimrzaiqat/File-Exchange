@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from os.path import basename, getsize
 
 
-# cd "C:\Users\Abo Al Cho5\Desktop\Ibrahim\Projects\File Transfer(FT)"
+
 
 
 #VARIABLES
