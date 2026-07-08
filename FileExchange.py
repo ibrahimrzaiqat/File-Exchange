@@ -44,8 +44,6 @@ class UDPListenerThread(QThread):
                 print(f"Received message from {sender_ip}:{sender_port}: {decoded_message}")
                 device_name= decoded_message
                 self.device_discovered.emit(device_name, sender_ip)
-
-
 class TCPServerThread(QThread):
     receive_progress_signal = pyqtSignal(int)  # Signal to update progress bar
     download_complete_signal = pyqtSignal(str)
@@ -106,7 +104,6 @@ class TCPServerThread(QThread):
                 self.download_complete_signal.emit(basename(save_path))
 
         conn.close()
-
 class TCPClientThread(QThread):
     sender_progress_signal = pyqtSignal(int)
     send_complete_signal= pyqtSignal(str)
@@ -141,7 +138,6 @@ class TCPClientThread(QThread):
 
         if not self.is_canceled:
             self.send_complete_signal.emit(os.path.basename(self.file_path))
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
