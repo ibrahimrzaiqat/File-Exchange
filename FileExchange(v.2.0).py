@@ -78,12 +78,25 @@ class TCPServerThread(QThread):
                 thread.start()
             except socket.timeout:
                 continue
+    
+    def recv_exact(conn, n):
+        buf = b''
+        while len(buf) < n:
+            chunk = conn.recv(n - len(buf))
+            if not chunk:
+                return None  # connection closed
+            buf += chunk
+        return buf
 
     def handle_client(self,conn, addr):
         self.is_canceled=False
         connected=True
         while connected:
-            message= conn.recv(header).decode(format).strip()
+            raw_header= self.recv_exact(conn, header)
+            if raw_header is None:
+                break
+
+            message= raw_header.decode(format).strip()
             if not message or message ==disconnect_msg:
                 break #when connection with client a "blank" msg is sent that will be interpreted as a false value, so the connection will be closed
             data=json.loads(message)
@@ -93,7 +106,8 @@ class TCPServerThread(QThread):
             bytes_received = 0
             with open(save_path, 'wb') as f:
                 while bytes_received < msg_length:
-                    chunk = conn.recv(1024)
+                    remaining = msg_length - bytes_received
+                    chunk = conn.recv(min(1024,remaining))
                     if not chunk or self.is_canceled==True:  
                         break
                     f.write(chunk)
