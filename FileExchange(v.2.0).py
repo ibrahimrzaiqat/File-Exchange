@@ -108,7 +108,7 @@ class TCPServerThread(QThread):
 
 class TCPClientThread(QThread):
     sender_progress_signal = pyqtSignal(int)
-    send_complete_signal= pyqtSignal(str)
+    send_complete_signal= pyqtSignal(list)
     def __init__(self, target_ip, file_path):
         super().__init__()
         self.target_ip= target_ip
@@ -146,7 +146,7 @@ class TCPClientThread(QThread):
                         break
 
                     client_socket.send(chunk)
-                    toal_bytes_sent += len(chunk)
+                    total_bytes_sent += len(chunk)
                     self.sender_progress_signal.emit(int((total_bytes_sent / total_size) * 100))
 
             if self.is_canceled:
@@ -158,7 +158,7 @@ class TCPClientThread(QThread):
         client_socket.close()
         
         if not self.is_canceled:
-            self.send_complete_signal.emit(os.path.basename(sent_files))
+            self.send_complete_signal.emit(sent_files)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -302,8 +302,8 @@ class MainWindow(QMainWindow):
                 size_str = f"{total_size / (1024*1024):.2f} MB"
             else:
                 size_str = f"{total_size / 1024:.2f} KB"
-                self.file_label.setText(f"Selected Files: {len(file_paths)} files")
-                self.status_label.setText(f"🟢 {len(file_paths)} Files Loaded ({size_str} total)")
+            self.file_label.setText(f"Selected Files: {len(file_paths)} files")
+            self.status_label.setText(f"🟢 {len(file_paths)} Files Loaded ({size_str} total)")
 
 
         self.progress_bar.setValue(0)  
@@ -338,7 +338,7 @@ class MainWindow(QMainWindow):
         else:
             self.status_label.setText(f"✅ Sent: {len(filenames)} files")
         self.progress_bar.setValue(0)
-        self.file_path = []
+        self.file_paths = []
         self.file_label.setText("Selected File: None")
         print(f"[UI UPDATE] Send complete: {filenames}")
 
