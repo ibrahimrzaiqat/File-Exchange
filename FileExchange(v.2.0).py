@@ -3,6 +3,8 @@ import os
 import socket
 import threading
 import json
+import time
+
 #FRONTEND IMPORTS
 import sys
 from PyQt5 import QtWidgets
@@ -124,6 +126,8 @@ class TCPServerThread(QThread):
 class TCPClientThread(QThread):
     sender_progress_signal = pyqtSignal(int)
     send_complete_signal= pyqtSignal(list)
+    connection_failed_signal = pyqtSignal(str)
+
     def __init__(self, target_ip, file_path):
         super().__init__()
         self.target_ip= target_ip
@@ -132,7 +136,11 @@ class TCPClientThread(QThread):
 
     def run(self):
         client_socket= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.connect((self.target_ip, tcp_port))
+        try:
+            client_socket.connect((self.target_ip, tcp_port))
+        except (socket.timeout, ConnectionRefusedError, OSError) as e:
+            self.connection_failed_signal.emit(str(e))
+            return
 
         self.is_canceled=False
         sent_files=[]
@@ -245,6 +253,10 @@ class MainWindow(QMainWindow):
         self.shout_timer.timeout.connect(self.send_udp_shout)
         self.shout_timer.start(5000)
 
+        self.cleanup_timer = QTimer(self)   # <-- add this
+        self.cleanup_timer.timeout.connect(self.remove_stale_devices)
+        self.cleanup_timer.start(5000)
+
 
 
     def send_udp_shout(self):
@@ -267,6 +279,7 @@ class MainWindow(QMainWindow):
         self.tcp_client_thread= TCPClientThread(self.target_ip, self.file_paths)
         self.tcp_client_thread.sender_progress_signal.connect(self.progress_bar.setValue)
         self.tcp_client_thread.send_complete_signal.connect(self.on_send_complete)
+        self.tcp_client_thread.connection_failed_signal.connect(self.on_connection_failed)
         self.tcp_client_thread.start()
 
     def cancel_btn_clicked(self):
@@ -295,6 +308,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.shout_timer.stop()
+        self.cleanup_timer.stop()
 
         QApplication.quit()
 
@@ -324,10 +338,13 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)  
 
     def add_device_to_list(self, name, ip):
+        now= time.time()
         if ip not in self.known_devices:
-            self.known_devices[ip]= name
+            self.known_devices[ip]= {"name": name, "last_seen": now}
             self.device_list.addItem(f"{name} ({ip})")
             print(f"[UI UPDATE] Added device to list: {name} ({ip})")
+        else:
+            self.known_devices[ip]["last_Seen"]= now
 
     def progress_bar_update(self, value):
         self.progress_bar.setValue(value)
@@ -356,6 +373,34 @@ class MainWindow(QMainWindow):
         self.file_paths = []
         self.file_label.setText("Selected File: None")
         print(f"[UI UPDATE] Send complete: {filenames}")
+
+    def on_connection_failed(self, error_msg):
+        self.status_label.setText(f"❌ Could not connect to {self.target_ip}: {error_msg}")
+        self.progress_bar.setValue(0)
+        print(f"[UI UPDATE] Connection failed: {error_msg}")
+
+    def remove_stale_devices(self):
+        timeout_seconds = 15  # remove if not heard from in 15s (shouts every 5s, so this allows ~2 missed beats)
+        now = time.time()
+        stale_ips = [ip for ip, info in self.known_devices.items() if now - info["last_seen"] > timeout_seconds]
+    
+        for ip in stale_ips:
+            name = self.known_devices[ip]["name"]
+            del self.known_devices[ip]
+    
+            # remove matching item from the QListWidget
+            for i in range(self.device_list.count()):
+                item = self.device_list.item(i)
+                if item and item.text() == f"{name} ({ip})":
+                    self.device_list.takeItem(i)
+                    break
+                
+            # if the removed device was the currently selected target, clear it
+            if self.target_ip == ip:
+                self.target_ip = None
+                self.status_label.setText(f"⚠️ {name} ({ip}) went offline. Please select another device.")
+    
+            print(f"[UI UPDATE] Removed stale device: {name} ({ip})")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
