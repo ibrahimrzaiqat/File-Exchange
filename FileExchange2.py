@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
      QVBoxLayout, QWidget, QLabel, QListWidget,
       QProgressBar, QHBoxLayout)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtGui import QIcon
 from os.path import basename, getsize
 
 
@@ -29,6 +30,11 @@ format= "utf-8"
 header= 1024
 disconnect_msg= "!!bYe!4!$//"
 my_ip= socket.gethostbyname(socket.gethostname())
+
+
+def resource_path(relative_path):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
 
 def recv_exact(conn, n):
         buf = b''
@@ -186,13 +192,92 @@ class TCPClientThread(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("My Application")
+        self.setWindowTitle("File Exchange")
+        self.setWindowIcon(QIcon(resource_path("logo2.ico")))
         self.resize(800, 700)
+
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #1e1e2f;
+            }
+            QLabel {
+                color: #e0e0e0;
+                font-size: 13px;
+            }
+            QLabel#titleLabel {
+                color: #ffffff;
+                font-size: 20px;
+                font-weight: bold;
+                padding: 10px 0px;
+            }
+            QLabel#statusLabel {
+                background-color: #2a2a40;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 13px;
+            }
+            QLabel#dropArea {
+                background-color: #2a2a40;
+                border: 2px dashed #5c5c8a;
+                border-radius: 10px;
+                padding: 40px;
+                color: #a0a0c0;
+                font-size: 15px;
+            }
+            QListWidget {
+                background-color: #2a2a40;
+                color: #e0e0e0;
+                border-radius: 8px;
+                padding: 5px;
+                font-size: 13px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-radius: 5px;
+            }
+            QListWidget::item:selected {
+                background-color: #5c5c8a;
+            }
+            QListWidget::item:hover {
+                background-color: #3a3a55;
+            }
+            QProgressBar {
+                background-color: #2a2a40;
+                border-radius: 8px;
+                text-align: center;
+                color: white;
+                font-weight: bold;
+                height: 22px;
+            }
+            QProgressBar::chunk {
+                background-color: #6c63ff;
+                border-radius: 8px;
+            }
+            QPushButton {
+                background-color: #6c63ff;
+                color: white;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5952d4;
+            }
+            QPushButton:pressed {
+                background-color: #4a43b0;
+            }
+            QPushButton#cancelBtn {
+                background-color: #3a3a55;
+            }
+            QPushButton#cancelBtn:hover {
+                background-color: #ff5c5c;
+            }""")
 
         self.target_ip= None
         self.file_paths= [] 
 
-        self.known_devices={} 
+        self.known_devices={}  # ip -> {"name": name, "last_seen": timestamp}
 
         self.setAcceptDrops(True)  # Enable drag and drop
         # Create the central widget and set it
@@ -202,8 +287,17 @@ class MainWindow(QMainWindow):
         # Create the layout
         self.layout = QVBoxLayout()
 
+        self.layout.setSpacing(15)
+        self.layout.setContentsMargins(20, 20, 20, 20)
+
+        title_label = QLabel("📡 File Exchange")
+        title_label.setObjectName("titleLabel")
+        title_label.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(title_label)
+        
         # 1. Status Label
         self.status_label = QLabel(f"🟢 Status: Listening on {host}:{udp_port}")
+        self.status_label.setObjectName("statusLabel") 
         self.layout.addWidget(self.status_label)
         
         
@@ -215,8 +309,8 @@ class MainWindow(QMainWindow):
 
         # 3. Drag and Drop Area
         self.drop_area = QLabel("📂 Drag & Drop File Here")
+        self.drop_area.setObjectName("dropArea")
         self.drop_area.setAlignment(Qt.AlignCenter)
-        self.drop_area.setStyleSheet("border: 2px dashed #aaa; border-radius: 5px; padding: 30px;")
         self.layout.addWidget(self.drop_area)
 
         # 4. File Info & Progress Bar
@@ -295,14 +389,18 @@ class MainWindow(QMainWindow):
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
+            self.drop_area.setStyleSheet("background-color: #3a3a68; border: 2px dashed #6c63ff; border-radius: 10px; padding: 40px; color: white; font-size: 15px;")
         else:
             event.ignore()
     
+    def dragLeaveEvent(self, event):
+        self.drop_area.setStyleSheet("")
+
     def dropEvent(self, event):
+        self.drop_area.setStyleSheet("")
         if event.mimeData().hasUrls():
             files= [url.toLocalFile() for url in event.mimeData().urls()]
             if files:
-                
                 print(f"File dropped: {files}")
                 self.on_files_selected(files)
 
@@ -404,6 +502,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(resource_path("logo2.ico")))
     window = MainWindow()
     window.show()
     window.send_udp_shout()  # Send the initial UDP shout when the application starts
