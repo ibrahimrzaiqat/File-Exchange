@@ -28,6 +28,15 @@ header= 1024
 disconnect_msg= "!!bYe!4!$//"
 my_ip= socket.gethostbyname(socket.gethostname())
 
+def recv_exact(conn, n):
+        buf = b''
+        while len(buf) < n:
+            chunk = conn.recv(n - len(buf))
+            if not chunk:
+                return None  # connection closed
+            buf += chunk
+        return buf
+
 class UDPListenerThread(QThread):
     device_discovered = pyqtSignal(str, str) 
     
@@ -78,21 +87,13 @@ class TCPServerThread(QThread):
                 thread.start()
             except socket.timeout:
                 continue
-    
-    def recv_exact(conn, n):
-        buf = b''
-        while len(buf) < n:
-            chunk = conn.recv(n - len(buf))
-            if not chunk:
-                return None  # connection closed
-            buf += chunk
-        return buf
+
 
     def handle_client(self,conn, addr):
         self.is_canceled=False
         connected=True
         while connected:
-            raw_header= self.recv_exact(conn, header)
+            raw_header= recv_exact(conn, header)
             if raw_header is None:
                 break
 
