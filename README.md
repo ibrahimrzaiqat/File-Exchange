@@ -11,3 +11,4 @@ them — no internet, cloud, or account required.
 - Files saved directly to your Downloads folder
 - Packaged as a standalone Windows executable
 
+Grab the latest release from the [Releases page] : https://github.com/ibrahimrzaiqat/File-Exchange/releases/tag/V1.0
