@@ -139,11 +139,20 @@ class TCPClientThread(QThread):
         self.target_ip= target_ip
         self.file_paths= file_path
         self.is_canceled= False
+        self.client_socket = None
+
+    def force_disconnect(self):
+        self.is_canceled = True
+        if self.client_socket:
+            try:
+                self.client_socket.close()
+            except OSError:
+                pass
 
     def run(self):
-        client_socket= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            client_socket.connect((self.target_ip, tcp_port))
+            self.client_socket.connect((self.target_ip, tcp_port))
         except (socket.timeout, ConnectionRefusedError, OSError) as e:
             self.connection_failed_signal.emit(str(e))
             return
@@ -154,37 +163,42 @@ class TCPClientThread(QThread):
         total_size = sum(os.path.getsize(f) for f in self.file_paths)
         total_bytes_sent = 0
 
-        for file_path in self.file_paths:
-            if self.is_canceled:
-                break
+        try:
+            for file_path in self.file_paths:
+                if self.is_canceled:
+                    break
 
+                message= {"file_name": os.path.basename(file_path) , "file_size": os.path.getsize(file_path)}
+                data= json.dumps(message).encode(format)
+                data += b' ' * (header - len(data))
+                self.client_socket.send(data)
 
+                with open(file_path, 'rb') as f:    
+                    while True:
+                        chunk = f.read(1024)
+                        if not chunk or self.is_canceled:
+                            break
 
-            message= {"file_name": os.path.basename(file_path) , "file_size": os.path.getsize(file_path)}
-            data= json.dumps(message).encode(format)
-            data += b' ' * (header - len(data))
-            client_socket.send(data)
+                        self.client_socket.send(chunk)
+                        total_bytes_sent += len(chunk)
+                        self.sender_progress_signal.emit(int((total_bytes_sent / total_size) * 100))
 
-            file_size = os.path.getsize(file_path)
-            with open(file_path, 'rb') as f:    
-                while True:
-                    chunk = f.read(1024)
-                    if not chunk:
-                        break
-                    if self.is_canceled==True:
-                        break
+                if self.is_canceled:
+                    break
 
-                    client_socket.send(chunk)
-                    total_bytes_sent += len(chunk)
-                    self.sender_progress_signal.emit(int((total_bytes_sent / total_size) * 100))
+                sent_files.append(os.path.basename(file_path))
 
-            if self.is_canceled:
-                break
+            if not self.is_canceled:
+                self.client_socket.send(disconnect_msg.encode(format))
 
-            sent_files.append(os.path.basename(file_path))
-        
-        client_socket.send(disconnect_msg.encode(format))
-        client_socket.close()
+        except OSError as e:
+            self.connection_failed_signal.emit(f"Connection lost mid-transfer: {e}")
+            return
+        finally:
+            try:
+                self.client_socket.close()
+            except OSError:
+                pass
         
         if not self.is_canceled:
             self.send_complete_signal.emit(sent_files)
@@ -345,11 +359,11 @@ class MainWindow(QMainWindow):
 
         self.shout_timer= QTimer(self)
         self.shout_timer.timeout.connect(self.send_udp_shout)
-        self.shout_timer.start(5000)
+        self.shout_timer.start(2000)
 
         self.cleanup_timer = QTimer(self)   # <-- add this
         self.cleanup_timer.timeout.connect(self.remove_stale_devices)
-        self.cleanup_timer.start(5000)
+        self.cleanup_timer.start(2000)
 
 
 
@@ -442,7 +456,7 @@ class MainWindow(QMainWindow):
             self.device_list.addItem(f"{name} ({ip})")
             print(f"[UI UPDATE] Added device to list: {name} ({ip})")
         else:
-            self.known_devices[ip]["last_Seen"]= now
+            self.known_devices[ip]["last_seen"]= now
 
     def progress_bar_update(self, value):
         self.progress_bar.setValue(value)
@@ -478,7 +492,7 @@ class MainWindow(QMainWindow):
         print(f"[UI UPDATE] Connection failed: {error_msg}")
 
     def remove_stale_devices(self):
-        timeout_seconds = 15  # remove if not heard from in 15s (shouts every 5s, so this allows ~2 missed beats)
+        timeout_seconds = 6  # remove if not heard from in 6s (shouts every 5s, so this allows ~2 missed beats)
         now = time.time()
         stale_ips = [ip for ip, info in self.known_devices.items() if now - info["last_seen"] > timeout_seconds]
     
@@ -493,8 +507,14 @@ class MainWindow(QMainWindow):
                     self.device_list.takeItem(i)
                     break
                 
-            # if the removed device was the currently selected target, clear it
-            if self.target_ip == ip:
+            if ( hasattr(self, 'tscp_client_thread') 
+                and self.tcp_client_thread.isRunning() 
+                and self.tcp_client_thread.target_ip == ip ):
+
+                self.tcp_client_thread.force_disconnect()
+                self.status_label.setText(f"⚠️ {name} ({ip}) went offline mid-transfer. Transfer canceled.")
+
+            elif self.target_ip == ip:
                 self.target_ip = None
                 self.status_label.setText(f"⚠️ {name} ({ip}) went offline. Please select another device.")
     
